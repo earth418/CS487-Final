@@ -21,7 +21,7 @@
 <body>
 <script type="module">
     import * as THREE from 'three';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
     // import { get_rpy_SO3_matrix } from './js/utils/utils_euler.js';
     // import {optimization_solve} from "./js/utils/utils_optimization.js";
 
@@ -40,14 +40,31 @@
 
     let engine = ThreeEngine.new_default_3d();
 
-    let mesh = engine.add_gltf_mesh_object("fourlegs.glb");
+    // let mesh = engine.add_gltf_mesh_object("fourlegs.glb");
 
     
     let loader = new GLTFLoader();
 
-    loader.load('./fourlegs.glb', (gltf) => {
-        engine.scene.add(gltf.scene);
-    });
+    // await loader.loadAsync('./fourlegs.glb', (gltf) => {
+
+    //     // console.log(gltf.scene.children[0].children[1]);
+    //     root_bone = gltf.scene.children[0].children[1];
+
+    //     engine.scene.add(gltf.scene);
+    // }, undefined, function ( error ) {
+    //     console.error( error ); 
+    // });
+
+    const s = await loader.loadAsync('./fourlegs.glb');
+    engine.scene.add(s.scene);
+
+    let root_bone = s.scene.children[0].children[1];
+    
+    let legs = root_bone.children;
+
+    // legs[0].position = new THREE.Vector3(0.0, 0.0, 0.0);
+    // legs[0].translateX(5.0);
+    
 
     // console.log(mesh);
 
