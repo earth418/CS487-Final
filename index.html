@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>CPSC 487/587</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <!-- <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script> -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.19.1/dist/lil-gui.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/10.3.0/math.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quaternion@1.5.1/quaternion.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/numeric@1.2.6/numeric-1.2.6.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stats.js@0.17.0/build/stats.min.js"></script> -->
+    <script type="importmap">
+        {
+            "imports": {
+              "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+              "three/": "https://unpkg.com/three@0.160.0/"
+            }
+        }
+    </script>
+</head>
+<body>
+<script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    // import { get_rpy_SO3_matrix } from './js/utils/utils_euler.js';
+    // import {optimization_solve} from "./js/utils/utils_optimization.js";
+
+    import {ThreeEngine, get_default_lil_gui, refresh_displays} from "./js/utils/utils_three.js";
+    // import {B1Z1Robot, XArm7Robot, RobotJointPrismatic, RobotJointRevolute} from "js/utils/utils_robot.js";
+    import {mul_matrix_matrix, mul_matrix_scalar, add_matrix_matrix, identity_matrix} from "./js/utils/utils_math.js";
+
+    // todo: create a visualization that demonstrates your knowledge of forward kinematics on a robot model.
+    // todo: The "default" assignment is to recreate this visualization:
+    // todo: https://yale-cpsc-487-587-internal-djrakita-c95fa6c3239a481a48d29a6b0fd.gitlab.io/html/unit4_visualizations/fk.html
+    // todo: or this visualization:
+    // todo: https://yale-cpsc-487-587-internal-djrakita-c95fa6c3239a481a48d29a6b0fd.gitlab.io/html/unit4_visualizations/fk2.html
+    // todo: however, feel free to deviate from this if you want to.
+    // todo: I will be adding information to the class wiki on important properties and subroutines regarding the robot
+    // todo: object created for this class.  If you have questions, refer to that wiki or ask me over slack.
+
+    let engine = ThreeEngine.new_default_3d();
+
+    let mesh = engine.add_gltf_mesh_object("fourlegs.glb");
+
+    
+    let loader = new GLTFLoader();
+
+    loader.load('./fourlegs.glb', (gltf) => {
+        engine.scene.add(gltf.scene);
+    });
+
+    // console.log(mesh);
+
+    // let joints = robot.joints;
+    // let links = robot.links;
+
+    // let settings = {
+    //     dof0 : 0.0,
+    //     dof1 : 0.0,
+    //     dof2 : 0.0
+    // };
+
+    // let gui = get_default_lil_gui();
+    // gui.add(settings, "reset", button);
+
+    // joint_ids.forEach((v, ind) => {
+    //     gui.add(settings, "dof"+ind, joints[v].lower_bound, joints[v].upper_bound).name("dof"+ind);
+    // });
+
+    function se3_from_rev_joint(joint) {
+        let dof = settings["dof" + joint.dof_idx];
+
+        let axis = joint.axis;
+        let u = mul_matrix_scalar(axis, dof);
+
+        let p = 0.0;
+        let q = 0.0;
+        let dof2 = dof*dof;
+
+        if (dof < 0.001) {
+            p = 1.0 - dof2/6 + dof2*dof2/120;
+            p = 0.5 - dof2/24 + dof2*dof2/720;
+        }
+        else {
+            p = Math.sin(dof) / dof;
+            q = (1 - Math.cos(dof)) / dof2;
+        }
+
+        let so3 = [
+            [0.0, -u[2], u[1]],
+            [u[2], 0.0, -u[0]],
+            [-u[1], u[0], 0.0],
+        ];
+
+        let so3_2 = mul_matrix_matrix(so3, so3);
+
+        let sumpq = add_matrix_matrix(
+            mul_matrix_scalar(so3, p),
+            mul_matrix_scalar(so3_2, q)
+        );
+
+        let transform = [
+            [1.0 + sumpq[0][0], sumpq[0][1], sumpq[0][2], 0.0],
+            [sumpq[1][0], 1.0 + sumpq[1][1], sumpq[1][2], 0.0],
+            [sumpq[2][0], sumpq[2][1], 1.0 + sumpq[2][2], 0.0],
+            [0.0, 0.0, 0.0, 1.0]];
+
+        return mul_matrix_matrix(joint.xyz_rpy_SE3_matrix, transform);
+    }
+    function se3_from_pris_joint(joint) {
+        let dof = settings["dof" + joint.dof_idx];
+
+        let axis = joint.axis;
+
+        let transform = [
+            [1.0, 0.0, 0.0, axis[0] * dof],
+            [0.0, 1.0, 0.0, axis[1] * dof],
+            [0.0, 0.0, 1.0, axis[2] * dof],
+            [0.0, 0.0, 0.0, 1.0]];
+
+        return mul_matrix_matrix(joint.xyz_rpy_SE3_matrix, transform);
+    }
+    function se3_from_ball_joint(joint) {
+        let so3 = get_rpy_SO3_matrix(joint.theta, joint.phi, joint.gamma);
+
+        return [
+            [so3[0][0], so3[0][1], so3[0][2], 0.0]
+            [so3[1][0], so3[1][1], so3[1][2], 0.0]
+            [so3[2][0], so3[2][1], so3[2][2], 0.0]
+            [      0.0,       0.0,       0.0, 1.0]
+        ];
+    }
+
+    function se3_from_joint(joint) {
+        if (joint.get_joint_type_string() == "revolute")
+            return se3_from_rev_joint(joint);
+        else if (joint.get_joint_type_string() == "prismatic") {
+            return se3_from_pris_joint(joint);
+        }
+        else
+            return joint.xyz_rpy_SE3_matrix;
+    }
+
+    // robot.set_link_mesh_pose_from_SE3_matrix(engine, 1, joints[1].xyz_rpy_SE3_matrix);
+
+    // let base_joint = joints[1].dof_idx;
+
+    // this will spawn all of the robot's links at the origin
+    // robot.spawn_robot(engine);
+
+    engine.animation_loop( ()  => {
+
+        // for (let i = 1; i < links.length; ++i) {
+
+        // // for (let i = 0; i < joint_ids.length; ++i) {
+        //     let link = links[i];
+            
+        //     let joint = joints[link.parent_joint_idx];
+        //     let transform = se3_from_joint(joint);
+        
+        //     while (link.parent_joint_idx > 0) {
+        //         // let new_joint = se3_from_joint(joints[joint.parent_link_idx]);
+        //         // console.log(joint.parent_link_idx);
+        //         let parent_link = links[link.parent_link_idx];
+        //         // console.log(parent_link.parent_joint_idx);
+        //         let new_joint = se3_from_joint(joints[parent_link.parent_joint_idx]);
+        //         transform = mul_matrix_matrix(new_joint, transform);
+        //         // console.log(joint.joint_idx);
+        //         // console.log(joint.parent_link_idx);
+        //         // joint = joint.parent_link_idx;
+        //         link = parent_link;
+        //     }
+        //     // console.log(i);
+        //     robot.set_link_mesh_pose_from_SE3_matrix(engine, i, transform);
+        // }
+    });
+
+</script>
+</body>
+</html>
