@@ -21,13 +21,15 @@
 <body>
 <script type="module">
     import * as THREE from 'three';
-    import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
+    import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
     import { get_rpy_SO3_matrix } from './js/utils/utils_euler.js';
-    // import {optimization_solve} from "./js/utils/utils_optimization.js";
+    import { optimization_solve } from './js/utils/utils_optimization.js';
 
     import {ThreeEngine, get_default_lil_gui, refresh_displays} from "./js/utils/utils_three.js";
     // import {B1Z1Robot, XArm7Robot, RobotJointPrismatic, RobotJointRevolute} from "js/utils/utils_robot.js";
-    import {mul_matrix_matrix, mul_matrix_scalar, add_matrix_matrix, identity_matrix, transpose} from "./js/utils/utils_math.js";
+    import {mul_matrix_matrix, mul_matrix_scalar, add_matrix_matrix, 
+        sub_matrix_matrix, identity_matrix, transpose,
+    roll_list_into_matrix, unroll_matrix_to_list } from "./js/utils/utils_math.js";
 
     import {TransformGizmoEngine} from "./js/utils/utils_transform.js";
 
@@ -85,9 +87,13 @@
     const s = await loader.loadAsync('./fourlegs.glb');
     engine.scene.add(s.scene);
 
+    let epsilon = 0.001;
+
     let root_bone = s.scene.children[0].children[1];
     
     let legs = root_bone.children;
+
+    // alert(1);
 
     // legs[0].position = new THREE.Vector3(0.0, 0.0, 0.0);
     // legs[0].translateX(5.0);
@@ -128,39 +134,56 @@
         params.push(0.0);
         params.push(0.0);
     });
-
     
-    // keep this just about where the legs are orginally
-    let ik_targets = legs.map((leg) => {
-        return {
-            thigh: leg.transform,
-            knee: leg.children[0].transform
-        };
-    }); // these are RELATIVE locations!!
-
-
-    function ik_from_ideal(parameters) {
-
-        let distance = 0.0;
-        for (let i = 0; i < legs.length; ++i) {
-            let base_index = i * 12 + 6;
-
-            let u_thigh = parameters.slice(base_index, base_index + 3);
-
-            let pos_knee = parameters.slice(base_index+3, base_index + 6);
-            let u_knee = parameters.slice(base_index+6, base_index + 9);
-        
-            let thigh_transform = se3_from_uvector(u_thigh);
-
-            let knee_transform = se3_from_uvector_and_position(u_knee, pos_knee);
-
-            distance += se3_distance(thigh_transform, ik_targets[i].thigh) 
-            + se3_distance(knee_transform, ik_targets[i].knee);
-        }
-
-        return distance;
+    function roll_up(list) {
+        return [[list[0], list[4], list[8], list[12]],
+               [list[1], list[5], list[9], list[13]],
+               [list[2], list[6], list[10], list[14]],
+               [list[3], list[7], list[11], list[15]]];
+    }
+    
+    function unroll(list) {
+        return [list[0][0], list[0][1], list[0][2], list[0][3],
+                list[1][0], list[1][1], list[1][2], list[1][3],
+                list[2][0], list[2][1], list[2][2], list[2][3],
+                list[3][0], list[3][1], list[3][2], list[3][3]];    
     }
 
+    function mat_from_se3(se3) {
+        let m = new THREE.Matrix4();
+        m.fromArray(unroll(se3));
+        return m;
+    }
+
+    function se3_from_mat(mat) {
+        let array = mat.toArray();
+        return roll_up(array);
+    }
+
+        // keep this just about where the legs are orginally
+    let ik_targets = [se3_from_uvector([0.0, 0.0, 0.0])];
+
+    let v = mat_from_se3(se3_from_uvector([1.0, 0.0, 5.0]));
+
+    // console.log(v);
+    console.log("before:");
+    let sm = legs[0].matrix;
+    console.log(sm);
+    console.log("tranaforms", v);
+    legs[0].applyMatrix4(v);
+    legs[0].updateMatrix();
+    console.log("after:")
+    console.log(legs[0].matrix);
+    
+    legs.forEach((leg) => {
+        ik_targets.push({
+            thigh: roll_list_into_matrix(leg.matrix, 4, 4),
+            // knee: roll_list_into_matrix(leg.children[0].matrix, 4, 4)
+        });
+    }); // these are RELATIVE locations!!
+
+    // console.log("ik targets");
+    // console.log(ik_targets);
     
     // let settings = {
     //     dof0 : 0.0,
@@ -248,6 +271,9 @@
 
     function se3_distance(se3_a, se3_b) {
 
+        console.log("se3");
+        console.log(se3_b);
+
         let o1_rot_T = transpose(get_SE3_rot_part(se3_a));
         let neg_T = [[-se3_a[0][3]], [-se3_a[1][3]], [-se3_a[2][3]]];
         
@@ -278,12 +304,12 @@
     function se3_from_uvector(u) {
 
         let beta2 = u[0] * u[0] + u[1] * u[1] + u[2] * u[2];
-        let beta = Math.sqrt(beta);
+        let beta = Math.sqrt(beta2);
 
         let p = 0.0;
         let q = 0.0;
 
-        if (beta < 0.00001) {
+        if (beta < epsilon) {
             p = 1.0 - beta2/6 + beta2*beta2/120;
             p = 0.5 - beta2/24 + beta2*beta2/720;
         }
@@ -323,6 +349,40 @@
         return rot;
     }
 
+    function ik_from_ideal(parameters) {
+
+        let distance = 0.0;
+        
+        let pos_base = parameters.slice(0, 3);
+        let u_base = parameters.slice(3, 6);
+
+        let base_transform = se3_from_uvector_and_position(u_base, pos_base);
+        
+        distance += se3_distance(base_transform, ik_targets[0]);
+
+        for (let i = 0; i < legs.length; ++i) {
+            let base_index = i * 12 + 6;
+
+            let u_thigh = parameters.slice(base_index, base_index + 3);
+
+            let pos_knee = parameters.slice(base_index+3, base_index + 6);
+            let u_knee = parameters.slice(base_index+6, base_index + 9);
+
+            let thigh_transform = se3_from_uvector(u_thigh);
+
+            let knee_transform = se3_from_uvector_and_position(u_knee, pos_knee);
+
+            console.log("hi");
+            console.log(ik_targets[i].thigh);
+            distance += se3_distance(thigh_transform, ik_targets[i].thigh);
+            // distance += se3_distance(knee_transform, ik_targets[i+1].knee);
+        }
+
+        return distance;
+    }
+
+    let res = optimization_solve(ik_from_ideal, params, 100, 'bfgs');
+
     // robot.set_link_mesh_pose_from_SE3_matrix(engine, 1, joints[1].xyz_rpy_SE3_matrix);
 
     // let base_joint = joints[1].dof_idx;
@@ -333,11 +393,12 @@
 
     engine.animation_loop( ()  => {
 
-        if (t > 1) {
-            console.log(gizmos.get_gizmo_pose_as_SO3_matrix_and_position(gizmo));
-            t = 0.0;
-        }
-        t += 0.05;
+        // if (t > 1) {
+        //     console.log(gizmos.get_gizmo_pose_as_SO3_matrix_and_position(gizmo));
+        //     t = 0.0;
+        // }
+        // t += 0.05;
+
         // for (let i = 1; i < links.length; ++i) {
 
         // // for (let i = 0; i < joint_ids.length; ++i) {
