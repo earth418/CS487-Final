@@ -83,7 +83,6 @@ export function optimization_solve(f, x0, max_iter=100, solver='bfgs',) {
     }
 }
 
-// f has to be a function of just a list for powell
 export function optimization_powell(f, x0, max_iter=100) {
     x0 = unroll_matrix_to_list(x0);
 

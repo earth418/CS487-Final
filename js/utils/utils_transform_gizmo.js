@@ -1,3 +1,8 @@
+/**
+ * Author: Danny Rakita
+ * Description: For CPSC-487-587 3D Spatial Modeling and Computing at Yale University
+ */
+
 import * as THREE from 'three';
 import {
     spawn_cube_base,

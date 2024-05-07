@@ -472,3 +472,4 @@ export function proj_scalar(v, u) {
     let d = Math.max(dot_product(u, u), 0.000000001);
     return n/d;
 }
+

@@ -18,14 +18,6 @@ export function get_z_rotation_so3_matrix(theta) {
     return [[Math.cos(theta), -Math.sin(theta), 0], [Math.sin(theta), Math.cos(theta), 0], [0,0,1]];
 }
 
-export function get_rpy_SO3_matrix(rpy) {
-    let rx = get_x_rotation_so3_matrix(rpy[0]);
-    let ry = get_y_rotation_so3_matrix(rpy[1]);
-    let rz = get_z_rotation_so3_matrix(rpy[2]);
-
-    return mul_matrix_matrix(mul_matrix_matrix(rx, ry), rz);
-}
-
 export function get_rotation_so3_matrix(axis_string, theta) {
     if(axis_string === 'x') {
         return get_x_rotation_so3_matrix(theta);
