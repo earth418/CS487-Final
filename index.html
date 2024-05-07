@@ -91,7 +91,7 @@
 
     // let root_bone = s.scene.children[0].children[1];
     let root_bone = s.scene.children[0];
-    console.log(root_bone);
+    // console.log(root_bone);
     
     let legs = root_bone.children;
 
@@ -161,29 +161,15 @@
     }
 
     function se3_from_mat(mat) {
-        // console.log("elements:", mat.elements);
-        // console.log("elements child:", mat.elements[0].elements);
-        // console.log("elements:", mat);
         let array = mat.elements;
         // console.log(array);
         return roll_up(array);
     }
 
-        // keep this just about where the legs are orginally
+    // keep this just about where the legs are orginally
 
 
     let v = mat_from_se3(se3_from_uvector([1.0, 0.0, 5.0]));
-
-    // console.log(v);
-    // let sm = se3_from_mat(legs[0].matrix);
-    // console.log("before:");
-    // console.log(sm);
-    // legs[0].applyMatrix4(v);
-    // legs[0].updateMatrix();
-    // console.log("after:")
-    // console.log(legs[0].matrix);
-    
-    // alert("h");
 
     let default_transforms = [];
     default_transforms.push(se3_from_mat(root_bone.matrix));
@@ -390,6 +376,7 @@
 
         distance += se3_distance(base_transform, ik_targets[0]);
 
+        // console.log(distance);
         // for (let i = 0; i < legs.length; ++i) {
         //     let base_index = i * 12 + 6;
 
@@ -433,9 +420,10 @@
 
         ik_targets[0] = gizmos.get_gizmo_pose_as_SE3_matrix(gizmo);
 
+        console.log("target:", ik_targets[0]);
         // if (se3_distance());
 
-        let res = optimization_solve(ik_from_ideal, params, 50, 'bfgs');
+        let res = optimization_solve(ik_from_ideal, params, 100, 'bfgs');
 
         let pos_base = res.slice(0, 3);
         let u_base = res.slice(3, 6);
@@ -443,6 +431,12 @@
         let base_transform = se3_from_uvector_and_position(u_base, pos_base);
 
         let result = mul_matrix_matrix(default_transforms[0], base_transform);
+
+        console.log("result", result);
+
+        // console.log(se3_distance(se3_from_mat(root_bone.matrix), ik_targets[0]));
+        console.log(se3_distance(result, ik_targets[0]));
+        console.log([result[0][3], result[1][3], result[2][3]]);
 
         setObjMatrix(root_bone, result);
 
