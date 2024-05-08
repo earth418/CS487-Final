@@ -218,7 +218,7 @@
         default_transforms.push({
             thigh: se3_from_object(leg),
             knee: se3_from_object(leg.children[0]),
-            foot: foot_pos_from_leg(leg)
+            foot: foot_pos_from_leg_relative(leg)
         });
     });
 
@@ -419,30 +419,35 @@
             let u_knee = parameters.slice(base_index+6, base_index + 9);
 
             let thigh_transform = se3_from_uvector(u_thigh);
-            // let thigh_base = mul_matrix_matrix(base_transform, thigh_transform);
-            thigh_transform = mul_matrix_matrix(root_transform, thigh_transform);
+            let thigh_result = mul_matrix_matrix(default_transforms[i+1].thigh, thigh_transform);
+            thigh_transform = mul_matrix_matrix(root_transform, thigh_result);
             
             let knee_transform = se3_from_uvector_and_position(u_knee, pos_knee);
-            knee_transform = mul_matrix_matrix(thigh_transform, knee_transform);
+            let knee_result = mul_matrix_matrix(default_transforms[i+1].knee, knee_transform);
+            knee_transform = mul_matrix_matrix(thigh_transform, knee_result);
 
             let foot_pos = foot_pos_from_knee(knee_transform);
 
             let diff = sub_matrix_matrix(foot_pos, ik_targets[i+1]);
             
-            distance += dot(diff[0], diff[0]);
+            distance += 4.0 * dot(diff[0], diff[0]);
 
             // constraint
             // let thigh_pos = [thigh_transform[0][3], thigh_transform[1][3], thigh_transform[2][3]];
             // let knee_pos = [knee_transform[0][3], knee_transform[1][3], knee_transform[2][3]];
             
             // constraint
-            let thigh_pos = knee_pos_from_thigh(thigh_transform);
-            let knee_pos = knee_pos_from_knee(knee_transform);            
+            // let thigh_pos = knee_pos_from_thigh(thigh_transform);
+            // let knee_pos = knee_pos_from_knee(knee_transform);            
 
-            diff = sub_matrix_matrix(thigh_pos, knee_pos);
+            // let diff2 = sub_matrix_matrix(thigh_pos, knee_pos);
 
-            distance += dot(diff[0], diff[0]);
+            // let dist = dot(diff2[0], diff2[0]);
+            // distance += 0.1 * Math.max(0.0, dist);
+            // let d = se3_distance2(thigh_transform, knee_transform) * 0.5;
+            // console.log(d);
         }
+
 
         return distance;
     }
@@ -482,29 +487,38 @@
         let gizmo_loc = gizmos.get_gizmo_pose_as_SE3_matrix(gizmo);
         ik_targets[0] = [[gizmo_loc[0][3], gizmo_loc[1][3], gizmo_loc[2][3]]];
 
-        // for (let i = 0; i < legs.length; ++i) {
-        //     let foot_pos = foot_pos_from_leg(legs[i]);
-        //     let default_foot_pos = default_transforms[i+1].foot;
-            
-        //     // let root_pos = obj_world_location(root_bone);
-            
-        //     // let diff = sub_matrix_matrix(root_pos, lastLocation);
-        //     let diff = sub_matrix_matrix(foot_pos, default_foot_pos);
-        //     let dist = dot(diff[0], diff[0]);
-        //     console.log(dist);
-        //     if (dist > 10.0) {
-        //         console.log("Time to update!");
+        for (let i = 0; i < legs.length; ++i) {
+            let foot_pos = foot_pos_from_leg(legs[i]);
 
-        //         let root_pos = obj_world_location(root_bone);
-        //         let foot_offset = foot_pos_from_leg_relative(legs[i]);
+            let default_foot_pos = default_transforms[i+1].foot;
+            let default_foot_pos_w = [[default_foot_pos[0][0]], [default_foot_pos[0][1]], [default_foot_pos[0][2]], [1.0]];
 
-        //         ik_targets[i + 1] = add_matrix_matrix(root_pos, foot_offset);
-        //         lastLocation = root_pos;
-        //     }
-        // }
+            let trans = se3_from_object_world(legs[i]);
+            // if_it_was_default
+            // let root_trans = se3_from_object_world(root_bone);
+            // root_trans = mul_matrix_matrix(root_trans, default_transforms[i+1].thigh);
+            // root_trans = mul_matrix_matrix(root_trans, default_transforms[i+1].knee);
 
-        // console.log("target:", ik_targets);
-        // if (se3_distance());
+            let where_foot_should_be = mul_matrix_matrix(trans, default_foot_pos_w);
+            // engine.draw_debug_sphere(default_foot_pos, 0.5, 0xff0000);
+            engine.draw_debug_sphere([where_foot_should_be[0][0], where_foot_should_be[1][0], where_foot_should_be[2][0]], 0.5, 0xff0000);
+            continue;
+            // let diff = sub_matrix_matrix(root_pos, lastLocation);
+            let diff = sub_matrix_matrix(foot_pos, where_foot_should_be);
+            let dist = dot(diff[0], diff[0]);
+            console.log(dist);
+            if (dist > 5.0) {
+                console.log("Time to update!");
+
+                // let root_pos = obj_world_location(root_bone);
+                // let foot_offset = foot_pos_from_leg_relative(legs[i]);
+
+                ik_targets[i+1] = where_foot_should_be;
+                // ik_targets[i + 1] = add_matrix_matrix(root_pos, foot_offset);
+                // lastLocation = root_pos;
+            }
+        }
+
 
         let res = optimization_solve(ik_from_ideal, params, 100, 'bfgs');
 
@@ -517,38 +531,6 @@
         let root_result = mul_matrix_matrix(default_transforms[0], base_transform);
 
         setObjMatrix(root_bone, root_result);
-
-        console.log(default_transforms);
-        for (let i = 0; i < 4; ++i) {
-
-            // let foot = default_transforms[i+1].foot;
-
-            // let foot = ik_targets[i+1];
-
-            // engine.draw_debug_sphere(foot, 0.3);
-
-            
-            
-            // let v = se3_from_object(legs[i]);
-            // // let r = se3_from_object_world(root_bone);
-            
-            // let leg_pos = transpose(get_SE3_trans_part(v))[0];
-            // leg_pos = [[leg_pos[0] * root_bone.scale.x,
-            // leg_pos[1] * root_bone.scale.z,
-            // leg_pos[2] * root_bone.scale.y]];
-            // // let leg_pos = se3_from_object(legs[i]);
-            // let root_pos = obj_world_location(root_bone);
-            // let leg = add_matrix_matrix(leg_pos, root_pos);
-            // engine.draw_debug_sphere(leg, 0.5);
-            
-            // let foot_pos = foot_pos_from_knee(v);
-            // engine.draw_debug_sphere(leg, 0.3);
-            // engine.draw_debug_sphere(leg_pos, 0.5);
-            // engine.draw_debug_sphere(ik_targets[i+1], 0.3);
-        }   
-
-        // console.log(get_SE3_trans_part(root_result));
-        // return;
 
         for (let i = 0; i < legs.length; ++i) {
             let base_index = i * 9 + 6;
@@ -583,10 +565,8 @@
             // let thigh_world = mul_matrix_matrix(root_result, default_thigh);
             // thigh_world = mul_matrix_matrix(thigh_world, thigh_transform);
             
-            // let knee_world = mul_matrix_matrix(root_result, default_thigh);
-            // knee_world = mul_matrix_matrix(knee_world, thigh_transform);
-            // knee_world = mul_matrix_matrix(knee_world, default_knee);
-            // knee_world = mul_matrix_matrix(knee_world, knee_transform);
+            let knee_world = mul_matrix_matrix(root_result, thigh_result);
+            knee_world = mul_matrix_matrix(knee_world, knee_result);
             // engine.draw_debug_sphere(foot_pos_from_knee(knee_world), 0.3);
         }
 
