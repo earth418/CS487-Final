@@ -507,6 +507,7 @@
 
             for (let i = 0; i < legs.length; ++i) {
                 let foot_pos = foot_pos_from_leg(legs[i]);
+                foot_pos = [[foot_pos[0][0], foot_pos[0][1], 0.0]];
 
                 let default_foot_pos = default_transforms[i+1].foot;
                 let default_foot_pos_w = [[default_foot_pos[0][0]], [default_foot_pos[0][1]], [default_foot_pos[0][2]], [1.0]];
@@ -540,6 +541,7 @@
                     console.log("Time to update!");
                     
                     ik_targets[i+1] = [vec_should_be];
+                    // ik_targets[i+1] = add_matrix_matrix([vec_should_be], mul_matrix_scalar(diff, 0.5));
                     // wait = 10;
                     // console.log(vec_should_be);
                     console.log(lastDistances[i]);
