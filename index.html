@@ -153,7 +153,7 @@
         let vec_pos = [pos.x, -pos.z, pos.y];
 
         if (v < 0.0001) {
-            return se3_from_uvector_and_position([0.0, 0.0, 0.0], vec_pos);
+            return se3_from_uvector_and_position([q.x, -q.z, q.y], vec_pos);
         } else {
             let uv = v / Math.sin(v);
             return se3_from_uvector_and_position([q.x * uv, -q.z * uv, q.y * uv], vec_pos);
@@ -168,7 +168,7 @@
         let vec_pos = [pos.x, -pos.z, pos.y];
 
         if (v < 0.0001) {
-            return se3_from_uvector_and_position([0.0, 0.0, 0.0], vec_pos);
+            return se3_from_uvector_and_position([q.x, -q.z, q.y], vec_pos);
         } else {
             let uv = v / Math.sin(v);
             return se3_from_uvector_and_position([q.x * uv, -q.z * uv, q.y * uv], vec_pos);
@@ -440,7 +440,7 @@
 
             let diff = sub_matrix_matrix(foot_pos, ik_targets[i+1]);
             
-            distance += 0.95 * dot(diff[0], diff[0]);
+            distance += 1.0 * dot(diff[0], diff[0]);
 
             // constraint
             // let thigh_pos = knee_pos_from_thigh(thigh_transform);
@@ -449,7 +449,7 @@
             // let diff2 = sub_matrix_matrix(thigh_pos, knee_pos);
 
             // let dist = dot(diff2[0], diff2[0]);
-            // distance += 0.2 * Math.max(0.0, dist - 0.5);
+            // distance += 0.05 * Math.pow(Math.max(0.0, dist - 0.9), 2);
 
             // // let d = se3_distance2(thigh_transform, knee_transform) * 0.5;
             // // console.log(d);
@@ -488,11 +488,11 @@
     }
 
     // let lastLocation = obj_world_location(root_bone);
-    let lastDistances = [
-        [0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.0],
-        [0.0, 0.0, 0.0]];
+    let lastDistances = [];
+
+    legs.forEach((l) => {
+        lastDistances.push([0.0, 0.0, 0.0, 0.0]);
+    });
     // let wait = 10;
 
     engine.animation_loop( ()  => {
@@ -515,6 +515,8 @@
                 let trans_t = default_transforms[i+1].thigh;
                 // let trans_k = default_transforms[i+1].knee;
 
+
+
                 let trans = mul_matrix_matrix(se3_from_object_world(root_bone), trans_t);
                 // trans = mul_matrix_matrix(trans, trans_k);
                 let where_foot_should_be = mul_matrix_matrix(trans, default_foot_pos_w);
@@ -523,22 +525,24 @@
                 // engine.draw_debug_sphere(ik_targets[i+1], 0.5, 0xff0000);
                 
 
-                let vec_should_be = [where_foot_should_be[0][0], where_foot_should_be[1][0], 0.0];
+                let vec_should_be = [where_foot_should_be[0][0], where_foot_should_be[1][0],  where_foot_should_be[2][0]];
                 let diff = sub_matrix_matrix(foot_pos, [vec_should_be]);
-                let dist = dot(diff[0], diff[0]);
-
+                let dist = Math.sqrt(dot(diff[0], diff[0]));
+                
                 let avg = 0.0;
                 lastDistances[i].shift(); // remove first element
                 lastDistances[i].push(dist); // put most recent last
-                lastDistances[i].forEach((n) => {avg += n;})
+                lastDistances[i].forEach((n, i) => {avg += n / (lastDistances[i].length - i);})
 
                 console.log(avg);
                 
-                if (avg > 1.0) {
+                if (avg > 0.5) {
                     console.log("Time to update!");
                     
                     ik_targets[i+1] = [vec_should_be];
                     // wait = 10;
+                    // console.log(vec_should_be);
+                    console.log(lastDistances[i]);
                 }
                 if (settings.debug) {
                     engine.draw_debug_sphere([where_foot_should_be[0][0], where_foot_should_be[1][0], 0.0], 0.5, 0xff0000);
