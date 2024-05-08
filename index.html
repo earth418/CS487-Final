@@ -97,11 +97,13 @@
 
 
     let settings = {
-        debug: false
+        debug: false,
+        stepping: true
     };
 
     let gui = get_default_lil_gui();
     gui.add(settings, "debug", false).name("Debug?");
+    gui.add(settings, "stepping", true).name("Take Steps?");
 
     // alert(1);
 
@@ -501,48 +503,51 @@
 
         ik_targets[0] = [[gizmo_loc[0][3], gizmo_loc[1][3], gizmo_loc[2][3]]];
 
-        for (let i = 0; i < legs.length; ++i) {
-            let foot_pos = foot_pos_from_leg(legs[i]);
+        if (settings.stepping) {
 
-            let default_foot_pos = default_transforms[i+1].foot;
-            let default_foot_pos_w = [[default_foot_pos[0][0]], [default_foot_pos[0][1]], [default_foot_pos[0][2]], [1.0]];
+            for (let i = 0; i < legs.length; ++i) {
+                let foot_pos = foot_pos_from_leg(legs[i]);
 
-            // let trans = se3_from_object_world(legs[i]);
-            let trans_t = default_transforms[i+1].thigh;
-            // let trans_k = default_transforms[i+1].knee;
+                let default_foot_pos = default_transforms[i+1].foot;
+                let default_foot_pos_w = [[default_foot_pos[0][0]], [default_foot_pos[0][1]], [default_foot_pos[0][2]], [1.0]];
 
-            let trans = mul_matrix_matrix(se3_from_object_world(root_bone), trans_t);
-            // trans = mul_matrix_matrix(trans, trans_k);
-            let where_foot_should_be = mul_matrix_matrix(trans, default_foot_pos_w);
-            // engine.draw_debug_sphere(default_foot_pos, 0.5, 0xff0000);
-            // continue;
-            // engine.draw_debug_sphere(ik_targets[i+1], 0.5, 0xff0000);
-            
+                // let trans = se3_from_object_world(legs[i]);
+                let trans_t = default_transforms[i+1].thigh;
+                // let trans_k = default_transforms[i+1].knee;
 
-            let vec_should_be = [where_foot_should_be[0][0], where_foot_should_be[1][0], 0.0];
-            let diff = sub_matrix_matrix(foot_pos, [vec_should_be]);
-            let dist = dot(diff[0], diff[0]);
-
-            let avg = 0.0;
-            lastDistances[i].shift(); // remove first element
-            lastDistances[i].push(dist); // put most recent last
-            lastDistances[i].forEach((n) => {avg += n;})
-
-            console.log(avg);
-            
-            if (avg > 1.0) {
-                console.log("Time to update!");
+                let trans = mul_matrix_matrix(se3_from_object_world(root_bone), trans_t);
+                // trans = mul_matrix_matrix(trans, trans_k);
+                let where_foot_should_be = mul_matrix_matrix(trans, default_foot_pos_w);
+                // engine.draw_debug_sphere(default_foot_pos, 0.5, 0xff0000);
+                // continue;
+                // engine.draw_debug_sphere(ik_targets[i+1], 0.5, 0xff0000);
                 
-                ik_targets[i+1] = [vec_should_be];
-                // wait = 10;
-            }
-            if (settings.debug) {
-                engine.draw_debug_sphere([where_foot_should_be[0][0], where_foot_should_be[1][0], 0.0], 0.5, 0xff0000);
 
-                engine.draw_debug_sphere(ik_targets[i+1], 0.5, 0x0000ff);
-            }
-        }
+                let vec_should_be = [where_foot_should_be[0][0], where_foot_should_be[1][0], 0.0];
+                let diff = sub_matrix_matrix(foot_pos, [vec_should_be]);
+                let dist = dot(diff[0], diff[0]);
 
+                let avg = 0.0;
+                lastDistances[i].shift(); // remove first element
+                lastDistances[i].push(dist); // put most recent last
+                lastDistances[i].forEach((n) => {avg += n;})
+
+                console.log(avg);
+                
+                if (avg > 1.0) {
+                    console.log("Time to update!");
+                    
+                    ik_targets[i+1] = [vec_should_be];
+                    // wait = 10;
+                }
+                if (settings.debug) {
+                    engine.draw_debug_sphere([where_foot_should_be[0][0], where_foot_should_be[1][0], 0.0], 0.5, 0xff0000);
+
+                    engine.draw_debug_sphere(ik_targets[i+1], 0.5, 0x0000ff);
+                }
+            }
+
+        }   
         // wait -= 1;
         
         // SOLVE
@@ -595,7 +600,8 @@
             
             let knee_world = mul_matrix_matrix(root_result, thigh_result);
             knee_world = mul_matrix_matrix(knee_world, knee_result);
-            // engine.draw_debug_sphere(foot_pos_from_knee(knee_world), 0.3);
+            if (settings.debug)
+                engine.draw_debug_sphere(foot_pos_from_knee(knee_world), 0.3);
         }
 
 
